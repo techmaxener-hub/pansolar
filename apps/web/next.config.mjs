@@ -1,6 +1,5 @@
-import type { NextConfig } from 'next';
-
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   transpilePackages: ['@solaros/ui', '@solaros/solar-engine', '@solaros/db'],
   experimental: {
     serverActions: {
