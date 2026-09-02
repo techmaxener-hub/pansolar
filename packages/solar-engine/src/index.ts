@@ -1,0 +1,10 @@
+export { calculateSolarSizing } from './calculator';
+export { generateParametricBom, bomTotalInr } from './bom-engine';
+export { calculatePmSuryaGharSubsidy } from './subsidy';
+export { getBlendedTariff, getGenerationFactor, DISCOM_BLENDED_TARIFF_INR_PER_UNIT } from './tariff-table';
+export type { SolarSizingInput, SolarSizingResult, BomLine, BomCategory, CatalogProduct } from './types';
+export { validateGstin, extractStateCodeFromGstin } from './gstin';
+export { computeGst } from './tax';
+export type { GstLineKind, GstBreakdown } from './tax';
+export { resolveTierPrice, calculateLineTotal } from './pricing-tiers';
+export type { PriceTier } from './pricing-tiers';

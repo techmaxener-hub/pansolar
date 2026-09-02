@@ -1,0 +1,287 @@
+// SolarOS Enterprise — shared-cluster schema.
+// This exact schema is also applied to every dedicated tenant database by
+// the distributed migration worker (see src/migration-worker.ts), so tenant
+// row-scoping columns (tenant_id) exist even on single-tenant dedicated DBs
+// where they are redundant but harmless — this keeps application queries
+// identical regardless of which physical database they run against.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DbHostingMode {
+  shared_cluster
+  dedicated_instance
+  @@map("db_hosting_mode")
+}
+
+enum SubscriptionTier {
+  standard
+  wholesaler_pro
+  enterprise_dedicated
+  @@map("subscription_tier")
+}
+
+enum SubscriptionStatus {
+  trialing
+  active
+  past_due
+  canceled
+  @@map("subscription_status")
+}
+
+enum EpcStage {
+  lead
+  shading_survey
+  bom_approval
+  net_meter_sanction
+  material_dispatch
+  erection_wiring
+  testing_commissioning
+  subsidy_disbursal
+  @@map("epc_stage")
+}
+
+enum AssetStatus {
+  warehoused
+  allocated
+  dispatched
+  installed
+  rma
+  @@map("asset_status")
+}
+
+enum PoStatus {
+  draft
+  submitted
+  acknowledged
+  partially_shipped
+  fulfilled
+  cancelled
+  @@map("po_status")
+}
+
+model Tenant {
+  id                 String             @id @default(uuid())
+  name               String
+  slug               String             @unique
+  customDomain       String?            @unique @map("custom_domain")
+  logoUrl            String?            @map("logo_url")
+  brandPrimaryColor  String?            @map("brand_primary_color")
+  brandFontFamily    String?            @map("brand_font_family")
+  subscriptionTier   SubscriptionTier   @default(standard) @map("subscription_tier")
+  subscriptionStatus SubscriptionStatus @default(trialing) @map("subscription_status")
+  dbMode             DbHostingMode      @default(shared_cluster) @map("db_mode")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  managedDatabase ManagedTenantDatabase?
+  products        Product[]
+  warehouses      Warehouse[]
+  serializedStock SerializedStock[]
+  solarProjects   SolarProject[]
+  purchaseOrders  PurchaseOrder[]
+  users           TenantUser[]
+
+  @@map("tenants")
+}
+
+model ManagedTenantDatabase {
+  id                     String   @id @default(uuid())
+  tenantId               String   @unique @map("tenant_id")
+  tenant                 Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider               String   @default("neon_serverless")
+  instanceId             String   @map("instance_id")
+  connectionUriEncrypted String   @map("connection_uri_encrypted")
+  region                 String   @default("ap-south-1")
+  storageAllocatedMb     Int      @default(5120) @map("storage_allocated_mb")
+  isActive               Boolean  @default(true) @map("is_active")
+  lastMigrationVersion   String   @default("v1.0.0") @map("last_migration_version")
+  provisionedAt          DateTime @default(now()) @map("provisioned_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantId])
+  @@map("managed_tenant_databases")
+}
+
+model TenantUser {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email     String
+  fullName  String   @map("full_name")
+  role      String   @default("staff")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([tenantId, email])
+  @@map("tenant_users")
+}
+
+model Warehouse {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  city      String
+  state     String
+  pincode   String
+  isDefault Boolean  @default(false) @map("is_default")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  serializedStock SerializedStock[]
+
+  @@index([tenantId])
+  @@map("warehouses")
+}
+
+model Product {
+  id             String   @id @default(uuid())
+  tenantId       String   @map("tenant_id")
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sku            String
+  name           String
+  category       String   // panel | inverter | acdb | dcdb | dc_cable | earthing | mounting | bos_other
+  specJson       Json     @map("spec_json")
+  unitPriceInr   Decimal  @map("unit_price_inr") @db.Decimal(12, 2)
+  gstRatePercent Decimal  @default(18) @map("gst_rate_percent") @db.Decimal(5, 2)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  serializedStock SerializedStock[]
+  bomLines        ProjectBomLine[]
+  priceTiers      ProductPriceTier[]
+
+  @@unique([tenantId, sku])
+  @@index([tenantId, category])
+  @@map("products")
+}
+
+// B2B tiered volume matrix: 1–9 pcs / 10–99 pcs / pallet-bulk pricing
+model ProductPriceTier {
+  id              String  @id @default(uuid())
+  productId       String  @map("product_id")
+  product         Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  minQty          Int     @map("min_qty")
+  maxQty          Int?    @map("max_qty")
+  unitPriceInr    Decimal @map("unit_price_inr") @db.Decimal(12, 2)
+  tierLabel       String  @map("tier_label") // "retail" | "carton" | "pallet" | "container"
+
+  @@index([productId, minQty])
+  @@map("product_price_tiers")
+}
+
+model SerializedStock {
+  id            String      @id @default(uuid())
+  tenantId      String      @map("tenant_id")
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productId     String      @map("product_id")
+  product       Product     @relation(fields: [productId], references: [id])
+  warehouseId   String?     @map("warehouse_id")
+  warehouse     Warehouse?  @relation(fields: [warehouseId], references: [id])
+  serialNumber  String      @map("serial_number")
+  status        AssetStatus @default(warehoused)
+  projectId     String?     @map("project_id")
+  project       SolarProject? @relation(fields: [projectId], references: [id])
+  inwardedAt    DateTime    @default(now()) @map("inwarded_at")
+  warrantyStart DateTime?   @map("warranty_start")
+  warrantyEnd   DateTime?   @map("warranty_end")
+
+  @@unique([tenantId, serialNumber])
+  @@index([tenantId, status])
+  @@map("serialized_stock")
+}
+
+model SolarProject {
+  id                  String   @id @default(uuid())
+  tenantId            String   @map("tenant_id")
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerName        String   @map("customer_name")
+  customerPhone       String   @map("customer_phone")
+  customerEmail       String?  @map("customer_email")
+  siteAddress         String   @map("site_address")
+  siteState           String   @map("site_state")
+  discom               String
+  monthlyBillInr      Decimal  @map("monthly_bill_inr") @db.Decimal(10, 2)
+  sanctionedLoadKw    Decimal? @map("sanctioned_load_kw") @db.Decimal(6, 2)
+  systemSizeKw        Decimal  @map("system_size_kw") @db.Decimal(6, 2)
+  requiredAreaSqft    Decimal  @map("required_area_sqft") @db.Decimal(8, 2)
+  estimatedCostInr    Decimal  @map("estimated_cost_inr") @db.Decimal(12, 2)
+  subsidyAmountInr    Decimal  @map("subsidy_amount_inr") @db.Decimal(12, 2)
+  netCostInr          Decimal  @map("net_cost_inr") @db.Decimal(12, 2)
+  stage               EpcStage @default(lead)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  bom             ProjectBomLine[]
+  serializedStock SerializedStock[]
+  milestones      ProjectMilestone[]
+
+  @@index([tenantId, stage])
+  @@map("solar_projects")
+}
+
+model ProjectBomLine {
+  id           String       @id @default(uuid())
+  projectId    String       @map("project_id")
+  project      SolarProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  productId    String?      @map("product_id")
+  product      Product?     @relation(fields: [productId], references: [id])
+  category     String
+  description  String
+  quantity     Decimal      @db.Decimal(10, 2)
+  unit         String
+  unitPriceInr Decimal      @map("unit_price_inr") @db.Decimal(12, 2)
+  lineTotalInr Decimal      @map("line_total_inr") @db.Decimal(12, 2)
+
+  @@index([projectId])
+  @@map("project_bom_lines")
+}
+
+model ProjectMilestone {
+  id          String       @id @default(uuid())
+  projectId   String       @map("project_id")
+  project     SolarProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stage       EpcStage
+  photoUrl    String?      @map("photo_url")
+  note        String?
+  recordedAt  DateTime     @default(now()) @map("recorded_at")
+
+  @@index([projectId])
+  @@map("project_milestones")
+}
+
+model PurchaseOrder {
+  id            String     @id @default(uuid())
+  tenantId      String     @map("tenant_id")
+  tenant        Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vendorName    String     @map("vendor_name")
+  vendorGstin   String     @map("vendor_gstin")
+  poNumber      String     @map("po_number")
+  status        PoStatus   @default(draft)
+  totalValueInr Decimal    @map("total_value_inr") @db.Decimal(14, 2)
+  createdAt     DateTime   @default(now()) @map("created_at")
+
+  asns AdvancedShippingNotice[]
+
+  @@unique([tenantId, poNumber])
+  @@index([tenantId, status])
+  @@map("purchase_orders")
+}
+
+model AdvancedShippingNotice {
+  id              String        @id @default(uuid())
+  purchaseOrderId String        @map("purchase_order_id")
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  asnNumber       String        @map("asn_number")
+  carrier         String
+  trackingNumber  String?       @map("tracking_number")
+  dispatchedAt    DateTime      @default(now()) @map("dispatched_at")
+  serialCsvUrl    String?       @map("serial_csv_url")
+
+  @@index([purchaseOrderId])
+  @@map("advanced_shipping_notices")
+}

@@ -1,0 +1,22 @@
+{
+  "name": "solaros-enterprise",
+  "private": true,
+  "version": "1.0.0",
+  "packageManager": "pnpm@9.7.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "pnpm --filter @solaros/db generate",
+    "db:migrate": "pnpm --filter @solaros/db migrate",
+    "db:seed": "pnpm --filter @solaros/db seed"
+  },
+  "devDependencies": {
+    "turbo": "^2.1.2",
+    "typescript": "^5.6.2"
+  }
+}
