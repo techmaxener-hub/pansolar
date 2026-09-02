@@ -2,7 +2,7 @@
   "name": "solaros-enterprise",
   "private": true,
   "version": "1.0.0",
-  "packageManager": "pnpm@9.7.0",
+  "packageManager": "pnpm@11.25.0",
   "engines": {
     "node": ">=20.0.0"
   },
