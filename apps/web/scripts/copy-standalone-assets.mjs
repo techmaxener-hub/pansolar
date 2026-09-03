@@ -231,11 +231,19 @@ console.log(`Copied ${ensured.size} runtime packages -> ${nodeModulesDir}`);
 // standalone unit's contents up one level — giving the same
 // output_directory value these hosts already deploy cleanly (.next) a
 // working, self-contained entry point at its root.
+//
+// Leave .next/standalone itself in place rather than removing it after
+// copying: Hostinger's own post-build check ("Next.js build produced no
+// standalone server or static output") looks for it directly and fails
+// the whole build if it's gone, confirmed by removing it here. The
+// duplicate-server.js confusion this removal used to guard against was a
+// symptom of the *old*, still-nested layout (.next/standalone/apps/web/
+// alongside a flat .next/server.js at a different depth) — now that
+// tracing is rooted at this app's own directory (see next.config.mjs),
+// .next/standalone/server.js and the flattened .next/server.js sit at
+// the same depth, so there's no ambiguity left for a host to pick the
+// wrong one.
 for (const name of readdirSync(standaloneDir)) {
   cpSync(join(standaloneDir, name), join(webDir, '.next', name), { recursive: true });
 }
-// Remove the now-copied source so exactly one server.js exists in the
-// output tree — a duplicate (nested) one previously made a host's deploy
-// step pick the wrong copy, isolated from the node_modules it needs.
-rmSync(standaloneDir, { recursive: true, force: true });
-console.log(`Flattened standalone unit into ${join(webDir, '.next')}`);
+console.log(`Flattened standalone unit into ${join(webDir, '.next')} (kept ${standaloneDir} too)`);
