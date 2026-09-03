@@ -37,6 +37,13 @@ function dereferenceSymlinks(dir) {
       const real = realpathSync(entryPath);
       rmSync(entryPath, { recursive: true, force: true });
       cpSync(real, entryPath, { recursive: true });
+      // The copied content can itself contain symlinks (e.g. a peer
+      // dependency like next/node_modules/styled-jsx) whose relative
+      // targets were only valid at their original location — recurse into
+      // the copy so those get dereferenced too.
+      if (lstatSync(entryPath).isDirectory()) {
+        dereferenceSymlinks(entryPath);
+      }
     } else if (stat.isDirectory()) {
       dereferenceSymlinks(entryPath);
     }
