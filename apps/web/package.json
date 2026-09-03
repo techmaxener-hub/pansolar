@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build && node scripts/copy-standalone-assets.mjs",
+    "build:debug": "next build && node scripts/copy-standalone-assets.mjs && node scripts/debug-smoke-test.mjs",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
