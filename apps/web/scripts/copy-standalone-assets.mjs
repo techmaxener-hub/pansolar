@@ -155,7 +155,19 @@ function resolvePackageRoot(req, depName) {
 }
 
 function ensurePackage(pkgRoot, pkgId) {
-  if (ensured.has(pkgId) || !existsSync(pkgRoot)) return;
+  if (!existsSync(pkgRoot)) return;
+  // require.resolve() is expected to dereference symlinks to their real,
+  // canonical location by default, but confirmed NOT to on Hostinger's
+  // build host for pnpm's own symlinked node_modules entries -- pg's and
+  // react's own dependencies (pg-connection-string, loose-envify, etc.,
+  // real siblings of the *real* package directory in pnpm's virtual
+  // store) came back "Cannot find module" because pkgRoot was still the
+  // app-level symlink, whose own directory has no such siblings. Force
+  // canonicalization here so every subsequent lookup — the resolve below,
+  // and the `ensured` de-dup key — is keyed on the one real location
+  // regardless of which symlink (if any) was used to reach it.
+  pkgRoot = realpathSync(pkgRoot);
+  if (ensured.has(pkgId)) return;
   ensured.add(pkgId);
   const dest = join(nodeModulesDir, pkgId);
   if (!existsSync(dest)) {
