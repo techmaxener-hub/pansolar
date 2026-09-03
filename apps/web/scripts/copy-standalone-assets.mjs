@@ -11,6 +11,36 @@ const webDir = dirname(fileURLToPath(import.meta.url)) + '/..';
 const nextDir = join(webDir, '.next');
 const standaloneDir = join(nextDir, 'standalone');
 
+// mkdirSync(dir, { recursive: true }) — and cpSync's own internal use of
+// it — assumes every ancestor that already exists is a real, traversable
+// directory. That assumption broke on Hostinger's own build host: next
+// build's standalone step tried to place each runtime dependency by
+// symlinking it in (see the longer note below) and that host restricts
+// symlinks that cross out of the website's document root, a narrower
+// version of the same privilege problem hit locally on Windows — leaving
+// .next/standalone/node_modules itself as a dangling symlink rather than
+// a plain missing path. Recursive mkdir sees an entry already there and
+// doesn't descend past it, so creating anything beneath it fails with
+// ENOENT (confirmed there: "mkdir .../standalone/node_modules/pg"). Walk
+// the ancestor chain ourselves and clear anything occupying it that isn't
+// already a real directory, and use this everywhere a directory needs to
+// exist in the output tree instead of trusting recursive mkdir/cpSync.
+function ensureDir(dir) {
+  const parent = dirname(dir);
+  if (parent !== dir) ensureDir(parent);
+  let entryStat;
+  try {
+    entryStat = lstatSync(dir);
+  } catch {
+    mkdirSync(dir);
+    return;
+  }
+  if (entryStat.isDirectory() && !entryStat.isSymbolicLink()) return;
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir);
+}
+ensureDir(standaloneDir);
+
 const staticSrc = join(webDir, '.next/static');
 const staticDest = join(standaloneDir, '.next/static');
 if (existsSync(staticSrc)) {
@@ -94,7 +124,7 @@ function copyDereferencing(src, dest) {
     return;
   }
   if (stat.isDirectory()) {
-    mkdirSync(dest, { recursive: true });
+    ensureDir(dest);
     for (const name of readdirSync(src)) {
       copyDereferencing(join(src, name), join(dest, name));
     }
