@@ -1,4 +1,4 @@
-import { cpSync, existsSync, readdirSync, lstatSync, rmSync, realpathSync } from 'node:fs';
+import { cpSync, existsSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -23,48 +23,19 @@ if (existsSync(publicSrc)) {
   console.log(`Copied public/ -> ${publicDest}`);
 }
 
-// In a pnpm monorepo, Next nests server.js under .next/standalone/apps/web
-// but hoists node_modules (and workspace packages like @solaros/db) one
-// level up at .next/standalone/, wired back in via relative symlinks. Hosts
-// that deploy this folder as a standalone, self-contained unit (e.g.
-// Hostinger's Passenger runtime) need every dependency physically inside
-// it — so replace each symlink with the real files it points to.
-function dereferenceSymlinks(dir) {
-  for (const name of readdirSync(dir)) {
-    const entryPath = join(dir, name);
-    const stat = lstatSync(entryPath);
-    if (stat.isSymbolicLink()) {
-      const real = realpathSync(entryPath);
-      rmSync(entryPath, { recursive: true, force: true });
-      cpSync(real, entryPath, { recursive: true });
-      // The copied content can itself contain symlinks (e.g. a peer
-      // dependency like next/node_modules/styled-jsx) whose relative
-      // targets were only valid at their original location — recurse into
-      // the copy so those get dereferenced too.
-      if (lstatSync(entryPath).isDirectory()) {
-        dereferenceSymlinks(entryPath);
-      }
-    } else if (stat.isDirectory()) {
-      dereferenceSymlinks(entryPath);
-    }
-  }
-}
-
-const nodeModulesDest = join(standaloneAppDir, 'node_modules');
-if (existsSync(nodeModulesDest)) {
-  dereferenceSymlinks(nodeModulesDest);
-  console.log(`Dereferenced node_modules symlinks -> ${nodeModulesDest}`);
-}
-
+// Next's own standalone output (.next/standalone/apps/web/server.js, its
+// node_modules, and its nested .next/ manifest) is deliberately relocatable
+// as a whole unit — the symlinks pnpm/Next wire up inside it are relative
+// and only resolve correctly as long as that unit's internal structure
+// stays intact together. Earlier attempts that dereferenced or flattened
+// individual entries broke peer-dependency siblings (e.g. next's own
+// node_modules/styled-jsx), crashing the deployed server at startup.
+//
 // Passenger-based hosts (e.g. Hostinger) that deploy the plain `.next`
-// build directory expect a `server.js` directly at its root — that's not
-// something a plain `next build` produces. Flatten the self-contained
-// standalone unit (server.js, its own node_modules, package.json, and its
-// nested runtime manifest under .next/) into the top level of `.next/` so
-// the same output_directory these hosts already recognize as a valid Next
-// build also contains a working, self-contained entry point.
-const outerNextDir = join(webDir, '.next');
-for (const name of readdirSync(standaloneAppDir)) {
-  cpSync(join(standaloneAppDir, name), join(outerNextDir, name), { recursive: true });
-}
-console.log(`Flattened standalone server into ${outerNextDir}`);
+// build directory expect a `server.js` directly at its root, so add a
+// thin wrapper there instead of moving anything — __dirname inside the
+// real server.js is intrinsic to that file, so requiring it from here
+// changes into the right directory exactly as running it directly would.
+const wrapperPath = join(webDir, '.next/server.js');
+writeFileSync(wrapperPath, "require('./standalone/apps/web/server.js');\n");
+console.log(`Wrote entry point -> ${wrapperPath}`);
