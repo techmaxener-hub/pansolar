@@ -1,4 +1,4 @@
-import { cpSync, existsSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, writeFileSync, renameSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -36,6 +36,15 @@ if (existsSync(publicSrc)) {
 // thin wrapper there instead of moving anything — __dirname inside the
 // real server.js is intrinsic to that file, so requiring it from here
 // changes into the right directory exactly as running it directly would.
+//
+// Rename the real, nested server.js first so there is only ever one file
+// named server.js in the whole output tree: with two, Hostinger's deploy
+// step promoted the nested one to the app root on its own, in isolation
+// from the node_modules it needs, rather than using this wrapper.
+const realServerPath = join(standaloneAppDir, 'server.js');
+const renamedServerPath = join(standaloneAppDir, 'next-server.js');
+renameSync(realServerPath, renamedServerPath);
+
 const wrapperPath = join(webDir, '.next/server.js');
-writeFileSync(wrapperPath, "require('./standalone/apps/web/server.js');\n");
+writeFileSync(wrapperPath, "require('./standalone/apps/web/next-server.js');\n");
 console.log(`Wrote entry point -> ${wrapperPath}`);
