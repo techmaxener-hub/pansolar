@@ -26,24 +26,27 @@ const nextConfig = {
   // root from its Root Directory project setting, so leave this unset
   // there and only pin it for the Hostinger path that actually needs it.
   outputFileTracingRoot: process.env.VERCEL ? undefined : __dirname,
+  // middleware.ts itself never touches the database, but Next's Edge
+  // bundler still pulled something reachable from pg-connection-string's
+  // dependency graph into its shared edge chunk on Vercel: every request
+  // through middleware.ts's matcher crashed with "TypeError: Invalid URL
+  // ... base: 'postgres://base'" (pg-connection-string's own internal
+  // parsing idiom) even on routes that never call any DB code themselves --
+  // confirmed by comparison, since routes middleware.ts's matcher excludes
+  // (e.g. /api/*) hit real application logic instead of this crash. (Tried
+  // experimental.nodeMiddleware to sidestep Edge entirely first -- reverted:
+  // Next logged it as both an unrecognized config key and an active
+  // experiment in the same build, and the build's own route summary lost
+  // its "ƒ Middleware" line entirely, meaning middleware wasn't being
+  // registered at all under it.) serverExternalPackages keeps 'pg' as a
+  // plain require() Next's bundler and tracer never touches, for any
+  // bundle -- including whichever shared chunk was pulling it into Edge.
+  serverExternalPackages: ['pg'],
   transpilePackages: ['@solaros/ui', '@solaros/solar-engine', '@solaros/db'],
   experimental: {
     serverActions: {
       bodySizeLimit: '5mb',
     },
-    // middleware.ts itself never touches the database, but Next's Edge
-    // bundler still pulled something reachable from pg-connection-string's
-    // dependency graph into its shared edge chunk on Vercel: every request
-    // through middleware.ts's matcher crashed with "TypeError: Invalid URL
-    // ... base: 'postgres://base'" (pg-connection-string's own internal
-    // parsing idiom) even on routes that never call any DB code themselves
-    // -- confirmed by comparison, since routes middleware.ts's matcher
-    // excludes (e.g. /api/*) hit real application logic instead of this
-    // crash. Node.js Middleware (middleware.ts's own `export const config
-    // = { runtime: 'nodejs' }` below) runs middleware in the same Node.js
-    // runtime as every other route instead of Edge, sidestepping whatever
-    // in Edge's bundling/sandbox pulled this in.
-    nodeMiddleware: true,
   },
 };
 
