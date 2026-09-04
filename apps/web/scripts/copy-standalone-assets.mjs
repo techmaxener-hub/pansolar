@@ -11,6 +11,21 @@ const webDir = dirname(fileURLToPath(import.meta.url)) + '/..';
 const nextDir = join(webDir, '.next');
 const standaloneDir = join(nextDir, 'standalone');
 
+// This script exists only to finish what next build's own `output:
+// 'standalone'` mode starts (see next.config.mjs, which enables it only
+// for the Hostinger/Passenger deploy path — Vercel builds this same app
+// without it, since Vercel needs no such self-contained bundle). Detect
+// that directly, from next build's own output, rather than re-deriving
+// "are we on Vercel" ourselves: check for server.js, the one file next
+// build's standalone step always writes on success, *before* anything
+// below gets a chance to create standalone/ itself and make that check
+// meaningless. With no standalone output to finish, there is nothing for
+// this script to do.
+if (!existsSync(join(standaloneDir, 'server.js'))) {
+  console.log(`No ${standaloneDir}/server.js — this build did not use output: 'standalone', nothing to do.`);
+  process.exit(0);
+}
+
 // mkdirSync(dir, { recursive: true }) — and cpSync's own internal use of
 // it — assumes every ancestor that already exists is a real, traversable
 // directory. That assumption broke on Hostinger's own build host: next
