@@ -12,30 +12,20 @@ const nextConfig = {
   // need or want it — Vercel sets VERCEL=1 in its build environment, so key
   // off that rather than maintaining two separate config files.
   output: process.env.VERCEL ? undefined : 'standalone',
-  // Next's own file-tracing — for *both* Vercel's native serverless bundling
-  // and this app's own standalone step above — misses next/dist/compiled/
-  // source-map in this Next.js version on a pnpm monorepo: confirmed as a
-  // Vercel runtime crash ("Cannot find module ... Did you forget to add it
-  // to dependencies") that persisted even after ruling out standalone mode
-  // entirely as the cause (same error, from Vercel's own non-standalone
-  // build, once that was confirmed via its build log to not be running the
-  // standalone path at all). It's used internally by Next's own compiled
-  // server for stack-trace source mapping, reached only through a
-  // runtime-computed require() the trace's static analysis doesn't follow —
-  // the same category of gap as react-dom's and @swc/helpers' in
-  // copy-standalone-assets.mjs, just inside Next's own tracer this time
-  // rather than ours. Force it into every route's trace explicitly.
-  outputFileTracingIncludes: {
-    '/**/*': ['./node_modules/next/dist/compiled/source-map/**'],
-  },
-  // Pin tracing to this app's own directory (not the monorepo root) so the
-  // standalone output lands flat at .next/standalone/server.js with no
-  // nested apps/web subfolder. @solaros/ui, @solaros/solar-engine, and
-  // @solaros/db are transpiled and bundled inline (see transpilePackages
-  // below), so their source outside this directory doesn't need tracing;
-  // real npm dependencies (next, react, pg, @prisma/client, ...) are all
-  // resolvable from this app's own node_modules regardless of tracing root.
-  outputFileTracingRoot: __dirname,
+  // Pinning this to apps/web's own directory (rather than the monorepo
+  // root) is what the Hostinger standalone path needs, so its output lands
+  // flat at .next/standalone/server.js with no nested apps/web subfolder.
+  // But per a Next.js maintainer's own diagnosis of this exact symptom
+  // (vercel/next.js#83248, closed 2026-09-03): pointing outputFileTracingRoot
+  // at anything other than the true monorepo root excludes some of Next's
+  // own runtime files — next/dist/compiled/source-map among them — from
+  // the production trace, which is exactly the "Cannot find module
+  // next/dist/compiled/source-map" crash this caused on every Vercel
+  // request once confirmed (via its build log) to have nothing to do with
+  // standalone mode itself. Vercel's own build already knows the monorepo
+  // root from its Root Directory project setting, so leave this unset
+  // there and only pin it for the Hostinger path that actually needs it.
+  outputFileTracingRoot: process.env.VERCEL ? undefined : __dirname,
   transpilePackages: ['@solaros/ui', '@solaros/solar-engine', '@solaros/db'],
   experimental: {
     serverActions: {
