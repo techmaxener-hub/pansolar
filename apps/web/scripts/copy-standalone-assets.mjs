@@ -1,4 +1,4 @@
-import { cpSync, existsSync, rmSync, mkdirSync, readdirSync, lstatSync, realpathSync, readFileSync } from 'node:fs';
+import { cpSync, existsSync, rmSync, mkdirSync, readdirSync, lstatSync, realpathSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join, resolve, sep } from 'node:path';
 import { createRequire } from 'node:module';
@@ -223,6 +223,27 @@ for (const depName of Object.keys(appPkg.dependencies ?? {})) {
   }
 }
 console.log(`Copied ${ensured.size} runtime packages -> ${nodeModulesDir}`);
+
+// next build writes its own package.json into .next/standalone with no
+// "dependencies" field at all -- reasonable for next's own use, since the
+// standalone bundle is meant to be self-contained via the node_modules
+// copied in above, not reinstalled. But if whatever promotes this build
+// on the host ever runs its own install against that file (observed
+// behavior on Hostinger: the deployed copy came up with our node_modules
+// missing "next" specifically, right after a build that copied it in
+// correctly, which package.json-driven reinstall dropping anything not
+// listed as a dependency would explain), an install there would produce
+// an empty node_modules missing exactly the packages this app depends on
+// but next's own metadata never declared. Overwrite it with this app's
+// real dependencies so a reinstall against this file -- if one happens --
+// succeeds instead of silently producing a broken tree.
+const standalonePkgPath = join(standaloneDir, 'package.json');
+const standalonePkg = existsSync(standalonePkgPath)
+  ? JSON.parse(readFileSync(standalonePkgPath, 'utf8'))
+  : { name: appPkg.name, version: appPkg.version, private: true };
+standalonePkg.dependencies = appPkg.dependencies;
+writeFileSync(standalonePkgPath, JSON.stringify(standalonePkg, null, 2) + '\n');
+console.log(`Rewrote ${standalonePkgPath} with this app's real dependencies`);
 
 // Passenger-based hosts (e.g. Hostinger) that deploy the plain `.next`
 // build directory expect a `server.js` directly at its root. With tracing
