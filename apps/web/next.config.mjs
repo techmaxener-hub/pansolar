@@ -31,6 +31,19 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '5mb',
     },
+    // middleware.ts itself never touches the database, but Next's Edge
+    // bundler still pulled something reachable from pg-connection-string's
+    // dependency graph into its shared edge chunk on Vercel: every request
+    // through middleware.ts's matcher crashed with "TypeError: Invalid URL
+    // ... base: 'postgres://base'" (pg-connection-string's own internal
+    // parsing idiom) even on routes that never call any DB code themselves
+    // -- confirmed by comparison, since routes middleware.ts's matcher
+    // excludes (e.g. /api/*) hit real application logic instead of this
+    // crash. Node.js Middleware (middleware.ts's own `export const config
+    // = { runtime: 'nodejs' }` below) runs middleware in the same Node.js
+    // runtime as every other route instead of Edge, sidestepping whatever
+    // in Edge's bundling/sandbox pulled this in.
+    nodeMiddleware: true,
   },
 };
 

@@ -35,4 +35,9 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: ['/((?!_next/static|_next/image|api|favicon.ico).*)'],
+  // See next.config.mjs's experimental.nodeMiddleware — Edge's bundling
+  // pulled something DB-adjacent into this file's shared chunk despite
+  // this file never importing it, crashing every matched request. Node.js
+  // Middleware runs this in the same runtime as every other route instead.
+  runtime: 'nodejs',
 };
