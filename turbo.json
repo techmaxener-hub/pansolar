@@ -1,5 +1,16 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalPassThroughEnv": [
+    "VERCEL",
+    "DATABASE_URL",
+    "TENANT_DB_ENCRYPTION_KEY",
+    "PLATFORM_ROOT_DOMAIN",
+    "DEDICATED_DB_PROVIDER",
+    "NEON_API_KEY",
+    "NEON_PROJECT_REGION",
+    "SUPABASE_MANAGEMENT_API_KEY",
+    "SUPABASE_ORG_ID"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
