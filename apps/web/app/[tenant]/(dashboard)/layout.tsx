@@ -42,6 +42,15 @@ export default async function DashboardLayout({
             {item.label}
           </Link>
         ))}
+        <div className="mt-auto border-t border-white/10 pt-4">
+          <Link
+            href={`/${tenantParam}`}
+            className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-400 hover:bg-white/5 hover:text-white"
+          >
+            <span>←</span>
+            Storefront
+          </Link>
+        </div>
       </aside>
       <main className="flex-1 p-8">{children}</main>
     </div>

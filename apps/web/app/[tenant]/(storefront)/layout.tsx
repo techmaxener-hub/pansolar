@@ -32,6 +32,9 @@ export default async function StorefrontLayout({
           <Link href={`/${tenantParam}/calculator`} className="hover:text-white">
             Solar Calculator
           </Link>
+          <Link href={`/${tenantParam}/crm`} className="hover:text-white">
+            Dashboard
+          </Link>
         </nav>
       </header>
       <main className="flex-1 py-10">{children}</main>

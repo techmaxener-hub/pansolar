@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import Link from 'next/link';
 import { KanbanBoard, GlassBadge, type KanbanColumnDef } from '@solaros/ui';
 import { moveProjectStage } from './actions';
 
@@ -48,7 +49,19 @@ export function CrmBoard({ tenantSlug, initialProjects }: { tenantSlug: string; 
               <GlassBadge tone="emerald">{card.systemSizeKw} kW</GlassBadge>
               <GlassBadge>{card.siteState}</GlassBadge>
             </div>
-            <p className="text-xs text-slate-500">₹{card.netCostInr.toLocaleString('en-IN')} net</p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-slate-500">₹{card.netCostInr.toLocaleString('en-IN')} net</p>
+              {/* draggable={false} keeps the browser's native link-drag from
+                  fighting the kanban card's own custom drag-and-drop, which
+                  is bound to this card's outer wrapper in KanbanBoard. */}
+              <Link
+                href={`/${tenantSlug}/quote/${card.id}`}
+                draggable={false}
+                className="text-xs text-emerald-300 hover:text-emerald-200 hover:underline"
+              >
+                View quote →
+              </Link>
+            </div>
           </div>
         )}
       />
